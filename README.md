@@ -1,1 +1,1 @@
-# Neuro-atlas
+# Neuro-Atlas
