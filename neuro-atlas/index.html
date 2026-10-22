@@ -1411,6 +1411,7 @@ function updateInstances(dt){
   const pulse=0.5+0.5*Math.sin(time*3.4);
   for(const h of halos)h.material.opacity=0.12+0.07*pulse;
   S.hlGlow=false;if(S.hl&&app.dataset.mode==='quiz')S.hl.forEach(v=>{if(v)S.hlGlow=true;});
+  const secS=app.dataset.mode==='quiz'?'atlas':S.secStyle;
   for(let ii=0;ii<instances.length;ii++){
     const inst=instances[ii],isB=ii===1;
     inst.root.visible=isB?(S.halves&&!disabled):true;
@@ -1442,7 +1443,7 @@ function updateInstances(dt){
       /* a cut down the midline should separate the hemispheres, not shave them: the kept hemisphere stays whole so its
          medial surface is visible, and the other one is removed entirely */
       let whole=false;
-      if(inst.cutting&&axisId==='x'&&Math.abs(A.pos)<0.45&&(p.fam==='cortex'||p.fam==='wm')&&p.side!=='M'&&!(S.secStyle==='mri'&&!S.halves&&!S.cortexSel)){
+      if(inst.cutting&&axisId==='x'&&Math.abs(A.pos)<0.45&&(p.fam==='cortex'||p.fam==='wm')&&p.side!=='M'&&!(secS==='mri'&&!S.halves&&!S.cortexSel)){
         whole=true;it.holder.updateMatrixWorld();_c.copy(p.center).applyMatrix4(it.holder.matrixWorld);
         if(inst.plane.distanceToPoint(_c)<=0)it.holder.visible=false;
       }
@@ -1451,7 +1452,7 @@ function updateInstances(dt){
       if(app.dataset.mode==='explore'&&S.sel&&!S.sel.cx&&S.sel.fam===p.fam&&vis&&p.fam!=='wm'&&p.diag<6){whole=true;it.holder.visible=true;}
       /* 3D dissection: deep structures the plane passes through stay whole and stand out of the cut face, so they keep their shape;
          ones lying entirely on the removed side are hidden. Big sheets (cortex, white matter, cerebellum, ventricles) are still sliced. */
-      if(S.dissect&&inst.cutting&&app.dataset.mode==='explore'&&S.secStyle!=='mri'&&vis&&p.diag<6&&['cortex','wm','cb','cbw','cc','chp'].indexOf(p.fam)<0){
+      if(S.dissect&&inst.cutting&&app.dataset.mode==='explore'&&secS!=='mri'&&vis&&p.diag<6&&['cortex','wm','cb','cbw','cc','chp'].indexOf(p.fam)<0){
         const st=straddles(it,inst.plane);
         if(st){whole=true;}
         else{it.holder.updateMatrixWorld();_c.copy(p.center).applyMatrix4(it.holder.matrixWorld);if(inst.plane.distanceToPoint(_c)<0)it.holder.visible=false;}
@@ -1463,18 +1464,23 @@ function updateInstances(dt){
       if(it.mat.clippingPlanes!==cp){it.mat.clippingPlanes=cp;it.pickMain.clippingPlanes=cp;}
       const hit=inst.cutting&&vis&&!whole&&straddles(it,inst.plane);
       it.sb.visible=it.sf.visible=it.cap.visible=hit;
-      if(hit&&p.role==='cortex'&&inst.slab)inst.slab.visible=S.secStyle==='mri'&&!S.halves&&!S.cortexSel&&A.explode<0.02;
-      if(it.capMat.uniforms){it.capMat.uniforms.uMix.value=S.secStyle==='atlas'?0:1;it.capMat.uniforms.uTint.value=S.secStyle==='mri'?0:0.62;}
+      if(hit&&p.role==='cortex'&&inst.slab)inst.slab.visible=secS==='mri'&&!S.halves&&!S.cortexSel&&A.explode<0.02;
+      if(it.capMat.uniforms){it.capMat.uniforms.uMix.value=secS==='atlas'?0:1;it.capMat.uniforms.uTint.value=secS==='mri'?0:0.62;}
       const isHl=S.hl&&S.hl.has(p.fam);
       const glowing=isHl&&!!S.hl.get(p.fam),anyGlow=S.hlGlow;
-      const dim=lerp(1,isHl?1:(anyGlow?0.16:0.3),A.focus);
+      const dim=lerp(1,isHl?1:(S.sliceQ?0.5:anyGlow?0.16:0.3),A.focus);
       let em=0,emCol=null;
       if(isHl){const c=S.hl.get(p.fam);if(c){emCol=c;em=A.focus*(S.hlGlow?0.5+0.35*pulse:app.dataset.mode==='explore'?0.22+0.1*pulse:0.2+0.2*pulse);}}
       else if(hoverFam&&p.fam===hoverFam&&A.focus<0.5){emCol='#ffffff';em=0.1;}
       it.mat.color.copy(it.mat.userData.base).multiplyScalar(dim);
       it.capMat.color.copy(it.capMat.userData.base).multiplyScalar(lerp(0.92,isHl?1.04:0.3,A.focus));
-      if(emCol){it.mat.emissive.set(emCol);it.mat.emissiveIntensity=em;tmpCol.set(emCol);it.capMat.color.lerp(tmpCol,Math.min(0.5,em*0.9));}
+      if(emCol){it.mat.emissive.set(emCol);it.mat.emissiveIntensity=em;if(!S.sliceQ){tmpCol.set(emCol);it.capMat.color.lerp(tmpCol,Math.min(0.5,em*0.9));}}
       else{it.mat.emissiveIntensity=0;}
+      if(S.sliceQ){
+        const cc=it.capMat.color.copy(it.capMat.userData.base);
+        if(isHl){cc.multiplyScalar(lerp(1,1.18,A.focus));cc.lerp(tmpCol.setRGB(1,1,1),lerp(0,0.08+0.32*pulse,A.focus));}
+        else{const l=0.3*cc.r+0.59*cc.g+0.11*cc.b;cc.setRGB(lerp(cc.r,l,0.4),lerp(cc.g,l,0.4),lerp(cc.b,l,0.4)).multiplyScalar(lerp(0.92,0.6,A.focus));}
+      }
       if(p.role==='cortex'){
         const g=A.ghost;
         it.mat.transparent=g>0.01;it.mat.opacity=1-(S.hlGlow?0.94:0.88)*g;it.mat.depthWrite=g<0.45;
@@ -1768,7 +1774,7 @@ function applyPaint(){
 }
 function resetScene(){
   S.cut={axis:null,pos:0,flip:false};S.halves=false;S.sep=0;S.open=0;S.explode=0;S.xray=false;S.autoGhost=false;
-  S.mode='natural';S.hl=null;S.cortexSel=null;S.hidden=new Set();S.hippoGrad=false;S.sel=null;hoverFam=null;S.tubes=null;
+  S.mode='natural';S.hl=null;S.cortexSel=null;S.hidden=new Set();S.hippoGrad=false;S.sel=null;hoverFam=null;S.tubes=null;S.sliceQ=false;clearHalo();
   if(S.unfold)setUnfold(0,true);
   DZ.scale={};DZ.w=null;DZ.side=0;
   applyPaint();clearOverlay();removeCallout();
@@ -2700,22 +2706,44 @@ const GEN={
       }};
   },
   structcut(r){
-    const keys=Object.keys(FAM).filter(k=>FAM[k].sec&&parts.some(p=>p.fam===k));
+    /* a real anatomy-practical card: one slice through this brain in atlas colours, with the answer lit up.
+       The plane is placed where the structure is thickest, and the wrong answers are other structures that really are in that slice. */
+    const keys=Object.keys(FAM).filter(k=>FAM[k].sec&&k!=='wm'&&parts.some(p=>p.fam===k));
     const f=pickOne(r,keys);
-    const c=famCenter[f],bb=fam2parts(f)[0].geo.boundingBox;
+    const P=fam2parts(f).find(p=>p.side!=='R')||fam2parts(f)[0],bb=P.geo.boundingBox;
     const sizes={x:bb.max.x-bb.min.x,y:bb.max.y-bb.min.y,z:bb.max.z-bb.min.z};
     let axes=['x','y','z'].filter(a=>sizes[a]>0.9);if(!axes.length)axes=['z'];
-    const axis=pickOne(r,axes);
-    const sided=fam2parts(f)[0].side!=='M';
-    const pos=axis==='x'?(sided?c.x:0):axis==='y'?c.y:c.z;
+    if(P.side==='M'&&axes.length>1)axes=axes.filter(a=>a!=='x'||sizes.x>2.5);
+    const axis=pickOne(r,axes),ai={x:0,y:1,z:2}[axis];
+    const vals=t=>{const a=t.geo.attributes.position.array,o=[];for(let i=ai;i<a.length;i+=3)o.push(a[i]);return o;};
+    const v=vals(P).sort((p,q)=>p-q),lo=v[Math.floor(v.length*0.15)],hi=v[Math.floor(v.length*0.85)];
+    let pos=(lo+hi)/2;
+    if(hi-lo>0.6){const n=Math.max(4,Math.round((hi-lo)/0.25)),h=new Array(n).fill(0);
+      for(const x of v){if(x<lo||x>hi)continue;h[Math.min(n-1,Math.floor((x-lo)/(hi-lo)*n))]++;}
+      let bi=0;for(let i=1;i<n;i++)if(h[i]>h[bi])bi=i;pos=lo+(bi+0.5)*(hi-lo)/n;}
+    if(axis==='x'&&P.side==='M')pos=Math.max(pos,0.35);
     const flip=axis==='y';
     const face={x:{az:-90,el:0},z:{az:180,el:0},y:{az:0,el:86}}[axis];
-    const g=FAM[f].group,same=keys.filter(k=>FAM[k].group===g&&k!==f),rest=keys.filter(k=>k!==f&&FAM[k].group!==g);
-    const pool=shuffle(r,same).slice(0,2).concat(shuffle(r,rest)).slice(0,3).concat([f]);
-    return{tag:'Structures in a slice',prompt:'What is the bright area in this '+PLANES[axis].name.toLowerCase()+' slice?',sub:'Everything else in the cut face is dimmed.',
+    /* which other structures does this slice actually cut through? */
+    const inSlice=[];
+    for(const q of parts){
+      if(q.fam===f||q.fam==='cortex'||q.fam==='wm'||!FAM[q.fam]||inSlice.includes(q.fam))continue;
+      if(axis==='x'&&q.side==='R')continue;
+      const b=q.geo.boundingBox,mn=axis==='x'?b.min.x:axis==='y'?b.min.y:b.min.z,mx=axis==='x'?b.max.x:axis==='y'?b.max.y:b.max.z;
+      if(pos<mn+0.1||pos>mx-0.1)continue;
+      let c=0;const a=q.geo.attributes.position.array;for(let i=ai;i<a.length;i+=3)if(Math.abs(a[i]-pos)<0.12)c++;
+      if(c>=8)inSlice.push(q.fam);
+    }
+    const g=FAM[f].group,same=keys.filter(k=>FAM[k].group===g&&k!==f&&!inSlice.includes(k)),rest=keys.filter(k=>k!==f&&!inSlice.includes(k));
+    const pool=shuffle(r,inSlice).slice(0,3).concat(shuffle(r,same),shuffle(r,rest)).filter((k,i,a)=>a.indexOf(k)===i).slice(0,3).concat([f]);
+    const c=P.center,tgt=V3(c.x,c.y,c.z);tgt.setComponent(ai,pos);
+    const mid=HOME.target.clone();mid.setComponent(ai,pos);tgt.lerp(mid,0.35);
+    const span=Math.max(...Object.values(sizes)),dist=clamp(24+span*1.3,26,38);
+    const also=inSlice.slice(0,5).map(k=>FAM[k].name.toLowerCase());
+    return{tag:'Structures in a slice',prompt:'Name the structure lit up in this '+PLANES[axis].name.toLowerCase()+' slice.',sub:'Every structure keeps its atlas colour. The one you are naming glows.',
       options:shuffle(r,pool).map(k=>({id:k,label:FAM[k].name})),answer:f,
-      explain:'<b>'+FAM[f].name+'.</b> '+FAM[f].about,
-      setup(){quizCut(axis,pos,flip);S.hl=new Map([[f,'#9ca8ff']]);camOn(face.az,face.el,41);}};
+      explain:'<b>'+FAM[f].name+'.</b> '+FAM[f].about+(also.length?' Also in this slice: '+also.join(', ')+'.':''),
+      setup(){quizCut(axis,pos,flip);S.sliceQ=true;S.hl=new Map([[f,FAM[f].color]]);camOn(face.az,face.el,dist,tgt);}};
   },
   lobe(r){
     const k=pickOne(r,[0,1,2,3,5]);
@@ -3014,7 +3042,8 @@ if(window.ResizeObserver){const ro=new ResizeObserver(()=>layoutSoon());ro.obser
     applyPaint();
     tw=null;placeCam((o.az||0)*DEG,(o.el||0)*DEG,o.dist||40,o.target?V3(...o.target):HOME.target);
   };
-  window.__neuro={matchTyped,selectLandmark,answerTyped,pickAt,layout,S,A,camera,controls,scene,renderer,parts,instances,setCut,flyTo,setMode,setSelection,GEN,makeQuestion,showQuestion,QS,view,regionInfo};}
+  const snap=()=>{if(tw){tw.t=1;stepTween(0);}A.pos=S.cut.axis?(S.cut.flip?-S.cut.pos:S.cut.pos):DISABLED;A.focus=S.hl&&S.hl.size?1:0;A.ghost=(S.xray||S.autoGhost)?1:0;};
+  window.__neuro={snap,matchTyped,selectLandmark,answerTyped,pickAt,layout,S,A,camera,controls,scene,renderer,parts,instances,setCut,flyTo,setMode,setSelection,GEN,makeQuestion,showQuestion,QS,view,regionInfo};}
 })().catch(err=>{console.error(err);const t=$('#ldText');if(t)t.textContent='Something went wrong while loading the brain: '+err.message;});
 })();
 </script>
